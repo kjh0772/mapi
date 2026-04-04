@@ -87,5 +87,10 @@ if (require.main === module) {
     return { ok: true };
   });
 
+  // 에코 핸들러: 채팅 테스트용
+  registerHandler('echo', (params) => {
+    return { echo: `[에코] ${params.message}` };
+  });
+
   console.log(`[MAPI Client] 장비 ID: ${DEVICE_ID} - 명령 대기 중...`);
 }

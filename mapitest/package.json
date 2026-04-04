@@ -1,0 +1,12 @@
+{
+  "name": "mapi-test",
+  "version": "1.0.0",
+  "main": "mapitest.js",
+  "scripts": {
+    "start": "node mapitest.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "mqtt": "^5.10.4"
+  }
+}
