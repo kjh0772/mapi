@@ -1,0 +1,11 @@
+{
+  "name": "mapi-server",
+  "version": "1.0.0",
+  "main": "mapiserver.js",
+  "scripts": {
+    "start": "node mapiserver.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.10.4"
+  }
+}

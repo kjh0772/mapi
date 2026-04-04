@@ -53,26 +53,27 @@ mapiclient.js  ── ws ──>  mqtt.agro24.com:8083  <── ws ──  mapis
 ### 1. 설치
 
 ```bash
-npm install
+cd server && npm install
+cd client && npm install
 ```
 
 ### 2. 서버 실행
 
 ```bash
-node mapiserver.js
+cd server && npm start
 ```
 
 ### 3. 클라이언트(장비) 실행
 
 ```bash
-DEVICE_ID=sensor-001 node mapiclient.js
+cd client && DEVICE_ID=sensor-001 npm start
 ```
 
 ### 4. 다른 프로젝트에서 모듈로 사용
 
 **서버 측:**
 ```js
-const { sendCommand, getDevices } = require('./mapiserver');
+const { sendCommand, getDevices } = require('./server/mapiserver');
 
 // 장비에 명령 전송
 const result = await sendCommand('sensor-001', 'getData', { type: 'temperature' });
@@ -84,7 +85,7 @@ console.log(getDevices());
 
 **클라이언트 측:**
 ```js
-const { registerHandler } = require('./mapiclient');
+const { registerHandler } = require('./client/mapiclient');
 
 // 커스텀 명령 핸들러 등록
 registerHandler('getData', (params) => {
@@ -101,7 +102,7 @@ registerHandler('control', (params) => {
 
 ## 다른 프로젝트에 적용하기
 
-1. `mapiserver.js`, `mapiclient.js` 복사
+1. `server/`, `client/` 폴더 복사
 2. `npm install mqtt`
 3. `BROKER_URL` 수정 (필요시)
 4. `TOPIC_PREFIX` 수정 (프로젝트별 네임스페이스 분리)
