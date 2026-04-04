@@ -18,7 +18,10 @@ const devices = new Map();
 // 명령 응답 대기 콜백 { requestId: { resolve, timer } }
 const pending = new Map();
 
-const client = mqtt.connect(BROKER_URL);
+const client = mqtt.connect(BROKER_URL, {
+  username: process.env.MQTT_USER || 'smart',
+  password: process.env.MQTT_PASS || 'korea'
+});
 
 // ── 연결 ──
 client.on('connect', () => {

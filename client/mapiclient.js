@@ -12,6 +12,8 @@ const DEVICE_ID = process.env.DEVICE_ID || 'sensor-001';
 
 // LWT: 비정상 종료 시 브로커가 자동으로 오프라인 상태 발행
 const client = mqtt.connect(BROKER_URL, {
+  username: process.env.MQTT_USER || 'smart',
+  password: process.env.MQTT_PASS || 'korea',
   will: {
     topic: `${TOPIC_PREFIX}/${DEVICE_ID}/status`,
     payload: JSON.stringify({ online: false, timestamp: new Date().toISOString() }),

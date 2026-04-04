@@ -21,7 +21,10 @@ const TOPIC_PREFIX = process.env.TOPIC_PREFIX || 'mapi';
 const PORT = process.env.PORT || 3000;
 
 // ── MQTT 연결 ──
-const client = mqtt.connect(BROKER_URL);
+const client = mqtt.connect(BROKER_URL, {
+  username: process.env.MQTT_USER || 'smart',
+  password: process.env.MQTT_PASS || 'korea'
+});
 
 const devices = new Map();   // deviceId → { online, lastSeen }
 const pending = new Map();   // requestId → { resolve, timer }
