@@ -6,11 +6,19 @@
 
 const mqtt = require('mqtt');
 
-const BROKER_URL = 'ws://mqtt.agro24.com:8083/mqtt';
-const TOPIC_PREFIX = 'mapi';
+const BROKER_URL = process.env.BROKER_URL || 'mqtt://mqtt.hdeng.net:1883';
+const TOPIC_PREFIX = process.env.TOPIC_PREFIX || 'mapi';
 const DEVICE_ID = process.env.DEVICE_ID || 'sensor-001';
 
-const client = mqtt.connect(BROKER_URL);
+// LWT: 비정상 종료 시 브로커가 자동으로 오프라인 상태 발행
+const client = mqtt.connect(BROKER_URL, {
+  will: {
+    topic: `${TOPIC_PREFIX}/${DEVICE_ID}/status`,
+    payload: JSON.stringify({ online: false, timestamp: new Date().toISOString() }),
+    qos: 0,
+    retain: true
+  }
+});
 
 // ── 명령 핸들러 등록 { action: handler(params) => result } ──
 const handlers = {};
@@ -23,8 +31,8 @@ function registerHandler(action, handler) {
 client.on('connect', () => {
   console.log(`[MAPI Client ${DEVICE_ID}] 연결 완료`);
 
-  // 내 장비의 명령 토픽 구독
-  client.subscribe(`${TOPIC_PREFIX}/${DEVICE_ID}/cmd`);
+  // 내 장비의 명령 토픽 구독 (QoS 1: 명령 유실 방지)
+  client.subscribe(`${TOPIC_PREFIX}/${DEVICE_ID}/cmd`, { qos: 1 });
 
   // 온라인 상태 알림
   publishStatus(true);
@@ -51,8 +59,8 @@ client.on('message', async (topic, payload) => {
     result = { requestId, success: false, error: `알 수 없는 명령: ${action}` };
   }
 
-  // 응답 전송
-  client.publish(`${TOPIC_PREFIX}/${DEVICE_ID}/res`, JSON.stringify(result));
+  // 응답 전송 (QoS 1)
+  client.publish(`${TOPIC_PREFIX}/${DEVICE_ID}/res`, JSON.stringify(result), { qos: 1 });
 });
 
 // ── 상태 발행 ──

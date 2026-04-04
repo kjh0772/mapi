@@ -9,8 +9,8 @@
 
 const mqtt = require('mqtt');
 
-const BROKER_URL = 'ws://mqtt.agro24.com:8083/mqtt';
-const TOPIC_PREFIX = 'mapi';
+const BROKER_URL = process.env.BROKER_URL || 'mqtt://mqtt.hdeng.net:1883';
+const TOPIC_PREFIX = process.env.TOPIC_PREFIX || 'mapi';
 
 // 연결된 장비 목록 { deviceId: { online, lastSeen, ... } }
 const devices = new Map();
@@ -23,9 +23,9 @@ const client = mqtt.connect(BROKER_URL);
 // ── 연결 ──
 client.on('connect', () => {
   console.log('[MAPI Server] MQTT 브로커 연결 완료');
-  // 모든 장비의 응답/상태 토픽 구독
-  client.subscribe(`${TOPIC_PREFIX}/+/res`);
-  client.subscribe(`${TOPIC_PREFIX}/+/status`);
+  // 응답 구독 (QoS 1: 유실 방지), 상태 구독 (QoS 0: 센서값 수준)
+  client.subscribe(`${TOPIC_PREFIX}/+/res`, { qos: 1 });
+  client.subscribe(`${TOPIC_PREFIX}/+/status`, { qos: 0 });
 });
 
 // ── 메시지 수신 ──
@@ -74,7 +74,7 @@ function sendCommand(deviceId, action, params = {}, timeout = 10000) {
     }, timeout);
 
     pending.set(requestId, { resolve, timer });
-    client.publish(`${TOPIC_PREFIX}/${deviceId}/cmd`, message);
+    client.publish(`${TOPIC_PREFIX}/${deviceId}/cmd`, message, { qos: 1 });
     console.log(`[장비 ${deviceId}] 명령 전송: ${action}`);
   });
 }

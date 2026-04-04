@@ -16,9 +16,9 @@ const mqtt = require('mqtt');
 const app = express();
 app.use(express.json());
 
-const BROKER_URL = 'ws://mqtt.agro24.com:8083/mqtt';
-const TOPIC_PREFIX = 'mapi';
-const PORT = 3000;
+const BROKER_URL = process.env.BROKER_URL || 'mqtt://mqtt.hdeng.net:1883';
+const TOPIC_PREFIX = process.env.TOPIC_PREFIX || 'mapi';
+const PORT = process.env.PORT || 3000;
 
 // ── MQTT 연결 ──
 const client = mqtt.connect(BROKER_URL);
@@ -29,8 +29,8 @@ const sseClients = [];       // SSE 연결된 브라우저들
 
 client.on('connect', () => {
   console.log('[MAPI Test] MQTT 브로커 연결 완료');
-  client.subscribe(`${TOPIC_PREFIX}/+/res`);
-  client.subscribe(`${TOPIC_PREFIX}/+/status`);
+  client.subscribe(`${TOPIC_PREFIX}/+/res`, { qos: 1 });
+  client.subscribe(`${TOPIC_PREFIX}/+/status`, { qos: 0 });
 });
 
 client.on('message', (topic, payload) => {
@@ -60,7 +60,7 @@ function sendCommand(deviceId, action, params = {}, timeout = 10000) {
       reject(new Error('응답 시간 초과'));
     }, timeout);
     pending.set(requestId, { resolve, timer });
-    client.publish(`${TOPIC_PREFIX}/${deviceId}/cmd`, JSON.stringify({ requestId, action, params }));
+    client.publish(`${TOPIC_PREFIX}/${deviceId}/cmd`, JSON.stringify({ requestId, action, params }), { qos: 1 });
   });
 }
 
