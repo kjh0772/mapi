@@ -11,11 +11,11 @@ const mqtt = require('mqtt');
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 3800;
-
 // ── 상태 ──
 let mqttClient = null;
+let httpServer = null;
 let config = {
+  port: parseInt(process.env.PORT) || 3800,
   brokerUrl: process.env.BROKER_URL || 'mqtt://mqtt.hdeng.net:1883',
   topicPrefix: process.env.TOPIC_PREFIX || 'mapi',
   username: process.env.MQTT_USER || 'smart',
@@ -125,7 +125,10 @@ app.get('/events', (req, res) => {
 app.get('/api/config', (req, res) => res.json(config));
 
 app.post('/api/config', (req, res) => {
-  const { brokerUrl, topicPrefix, username, password } = req.body;
+  const { port, brokerUrl, topicPrefix, username, password } = req.body;
+  const newPort = port ? parseInt(port) : null;
+  const portChanged = newPort && newPort !== config.port;
+  if (newPort) config.port = newPort;
   if (brokerUrl) config.brokerUrl = brokerUrl;
   if (topicPrefix) config.topicPrefix = topicPrefix;
   if (username !== undefined) config.username = username;
@@ -133,6 +136,15 @@ app.post('/api/config', (req, res) => {
   connectMqtt();
   connectEchoClient();
   res.json({ ok: true, config });
+  if (portChanged) {
+    setTimeout(() => {
+      httpServer.close(() => {
+        httpServer = app.listen(config.port, () => {
+          console.log(`[MAPI UI] 포트 변경: ${config.port}`);
+        });
+      });
+    }, 500);
+  }
 });
 
 app.get('/api/devices', (req, res) => res.json(Object.fromEntries(devices)));
@@ -289,9 +301,13 @@ const HTML = `<!DOCTYPE html>
 <!-- 패널: 설정 -->
 <div class="panel" id="panel-config">
   <div class="config-grid">
-    <div class="field full">
+    <div class="field">
       <label>MQTT 브로커 URL</label>
       <input id="cfgBroker" placeholder="mqtt://host:port">
+    </div>
+    <div class="field">
+      <label>웹 서버 포트</label>
+      <input id="cfgPort" type="number" placeholder="3800">
     </div>
     <div class="field">
       <label>토픽 Prefix</label>
@@ -412,6 +428,7 @@ function updateStats() {
 
 // ── 설정 ──
 fetch('/api/config').then(r => r.json()).then(c => {
+  document.getElementById('cfgPort').value = c.port;
   document.getElementById('cfgBroker').value = c.brokerUrl;
   document.getElementById('cfgPrefix').value = c.topicPrefix;
   document.getElementById('cfgUser').value = c.username;
@@ -419,16 +436,24 @@ fetch('/api/config').then(r => r.json()).then(c => {
 });
 
 function saveConfig() {
+  const newPort = document.getElementById('cfgPort').value;
   const body = {
+    port: newPort,
     brokerUrl: document.getElementById('cfgBroker').value,
     topicPrefix: document.getElementById('cfgPrefix').value,
     username: document.getElementById('cfgUser').value,
     password: document.getElementById('cfgPass').value
   };
+  const portChanged = newPort != location.port;
   fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
     .then(r => r.json()).then(() => {
-      document.getElementById('cfgMsg').textContent = '저장 완료, 재연결 중...';
-      setTimeout(() => document.getElementById('cfgMsg').textContent = '', 3000);
+      if (portChanged) {
+        document.getElementById('cfgMsg').textContent = '포트 변경됨, 새 주소로 이동 중...';
+        setTimeout(() => { location.href = location.protocol + '//' + location.hostname + ':' + newPort; }, 2000);
+      } else {
+        document.getElementById('cfgMsg').textContent = '저장 완료, 재연결 중...';
+        setTimeout(() => document.getElementById('cfgMsg').textContent = '', 3000);
+      }
     });
 }
 
@@ -540,8 +565,8 @@ function connectEchoClient() {
 }
 
 // ── 서버 시작 ──
-app.listen(PORT, () => {
-  console.log(`[MAPI UI] http://localhost:${PORT}`);
+httpServer = app.listen(config.port, () => {
+  console.log(`[MAPI UI] http://localhost:${config.port}`);
   console.log(`[MAPI UI] 내장 에코 클라이언트: ${DEVICE_ID}`);
   connectMqtt();
   connectEchoClient();
