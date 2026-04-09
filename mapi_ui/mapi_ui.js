@@ -11,7 +11,7 @@ const mqtt = require('mqtt');
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3800;
 
 // ── 상태 ──
 let mqttClient = null;

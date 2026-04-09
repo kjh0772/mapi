@@ -145,7 +145,7 @@ console.log(getDevices());
 | `MQTT_USER` | `smart` | MQTT 인증 사용자명 |
 | `MQTT_PASS` | `korea` | MQTT 인증 비밀번호 |
 | `DEVICE_ID` | `echo-001` | 내장 에코 클라이언트 장비 ID |
-| `PORT` | `3000` | 대시보드 웹서버 포트 |
+| `PORT` | `3800` | 대시보드 웹서버 포트 |
 
 사용 예:
 ```bash
