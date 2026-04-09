@@ -18,7 +18,7 @@ MQTT 방식의 장점:
 
 ```
 [장비/센서]                    [MQTT 브로커]                    [서버]
-mapiclient.js  ── ws ──>  mqtt.agro24.com:8083  <── ws ──  mapiserver.js
+mapiclient.js  ── ws ──>  mqtt.hdeng.net:1883  <── ws ──  mapiserver.js
 ```
 
 ### 토픽 구조

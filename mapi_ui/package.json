@@ -1,9 +1,9 @@
 {
-  "name": "mapi-test",
+  "name": "mapi-ui",
   "version": "1.0.0",
-  "main": "mapitest.js",
+  "main": "mapi_ui.js",
   "scripts": {
-    "start": "node mapitest.js"
+    "start": "node mapi_ui.js"
   },
   "dependencies": {
     "express": "^4.21.0",
