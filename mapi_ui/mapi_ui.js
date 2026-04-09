@@ -332,9 +332,9 @@ const HTML = `<!DOCTYPE html>
 <div class="panel" id="panel-test">
   <div class="test-area">
     <div class="test-row">
-      <div class="field"><label>장비 ID</label><input id="testDid" value="smartfarm-001"></div>
+      <div class="field"><label>장비 ID</label><input id="testDid" value="server-001"></div>
       <div class="field"><label>Action</label><input id="testAction" value="api"></div>
-      <div class="field"><label>Params (JSON)</label><input id="testParams" value='{"method":"GET","path":"/api/whoami"}'>
+      <div class="field"><label>Params (JSON)</label><input id="testParams" value='{"method":"GET","path":"/"}'>
       </div>
       <button class="btn btn-primary" onclick="sendTest()" id="testBtn">전송</button>
     </div>

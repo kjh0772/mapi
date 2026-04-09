@@ -11,7 +11,16 @@
  *
  * 명령 형식:
  *   action: "api"
- *   params: { method: "GET", path: "/api/plc", body: {} }
+ *   params: { method: "GET", path: "/api/xxx", body: {} }
+ *
+ * 환경변수:
+ *   BROKER_URL   - MQTT 브로커 (기본: mqtt://mqtt.hdeng.net:1883)
+ *   TOPIC_PREFIX - 토픽 네임스페이스 (기본: mapi)
+ *   DEVICE_ID    - 이 서버의 장비 ID (기본: server-001)
+ *   API_HOST     - 래핑 대상 API 호스트 (기본: localhost)
+ *   API_PORT     - 래핑 대상 API 포트 (기본: 3000)
+ *   MQTT_USER    - MQTT 인증 사용자 (기본: smart)
+ *   MQTT_PASS    - MQTT 인증 비밀번호 (기본: korea)
  */
 
 const mqtt = require('mqtt');
@@ -19,9 +28,9 @@ const http = require('http');
 
 const BROKER_URL = process.env.BROKER_URL || 'mqtt://mqtt.hdeng.net:1883';
 const TOPIC_PREFIX = process.env.TOPIC_PREFIX || 'mapi';
-const DEVICE_ID = process.env.DEVICE_ID || 'smartfarm-001';
+const DEVICE_ID = process.env.DEVICE_ID || 'server-001';
 const API_HOST = process.env.API_HOST || 'localhost';
-const API_PORT = parseInt(process.env.API_PORT) || 4000;
+const API_PORT = parseInt(process.env.API_PORT) || 3000;
 
 // ── MQTT 연결 ──
 const client = mqtt.connect(BROKER_URL, {
