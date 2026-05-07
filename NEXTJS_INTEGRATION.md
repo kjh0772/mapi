@@ -1,7 +1,10 @@
-# MAPI ↔ Next.js 통합 가이드
+# MAPI ↔ Next.js / 외부 서버 통합 가이드
 
 > 이 문서는 **Claude Code가 읽고 직접 실행할 수 있는 작업 지시서**이자 **개발자가 읽고 이해할 수 있는 가이드**입니다.
-> Next.js 프로젝트에 MAPI(MQTT 기반 IoT 통신 래퍼)를 내장하여, 장비 IP 없이 장비/원격 API를 호출할 수 있게 만듭니다.
+>
+> 다루는 범위:
+> 1. **Next.js 프로젝트에 MAPI 모듈 내장** (시나리오 A, B) — 섹션 1~4
+> 2. **Next.js 외 외부 클라이언트 서버에서 MAPI 장비 호출** (Node.js / Python / mosquitto) — 섹션 5
 
 ---
 
@@ -298,6 +301,192 @@ import { NextRequest } from 'next/server';
 - API Route 앞단에 인증 미들웨어를 두어 인증된 사용자만 호출 가능하도록
 - `deviceId` 화이트리스트 검증 (모든 장비를 호출 가능하게 두면 위험)
 - Rate limiting 적용
+
+---
+
+## 5. 외부 클라이언트 서버에서 MAPI 장비 접근하기
+
+Next.js와 무관한 **제3의 서버** (예: 다른 회사의 백엔드, 모바일 앱 백엔드, 데이터 분석 서버, 다른 언어/프레임워크의 서비스)에서 MAPI 장비에 접근하는 방법입니다.
+
+### 5-1. 핵심 아이디어
+
+MAPI 장비는 결국 **MQTT 토픽을 구독/발행하는 클라이언트**입니다. 따라서 **MQTT 클라이언트를 가진 어떤 서버든** 다음 4가지만 알면 접근 가능합니다:
+
+| 필요한 정보 | 예시 |
+|---|---|
+| 브로커 URL | `mqtt://mqtt.hdeng.net:1883` |
+| 인증 정보 | `smart` / `korea` |
+| 토픽 prefix | `mapi` |
+| 대상 장비 ID | `smartfarm-001` |
+
+> 외부 서버는 MAPI 패키지를 설치할 필요가 **없습니다**. 어떤 언어든 MQTT 라이브러리만 있으면 됩니다.
+
+### 5-2. 통신 프로토콜 (외부 서버가 따라야 할 규칙)
+
+**A) 명령 발행 → 응답 수신 패턴 (가장 일반적):**
+
+1. `mapi/{deviceId}/res` 토픽 구독 (응답 수신용)
+2. 고유한 `requestId` 생성 (예: `myserver-1712345678`)
+3. `mapi/{deviceId}/cmd` 토픽에 명령 JSON 발행 (QoS 1 권장)
+4. 구독한 res 토픽에서 같은 `requestId`를 가진 응답을 기다림
+5. 타임아웃(예: 10초) 내에 응답이 오지 않으면 실패 처리
+
+**B) 장비 상태 모니터링 패턴:**
+
+1. `mapi/+/status` 토픽을 와일드카드로 구독
+2. 모든 장비의 온/오프라인 상태가 들어옴
+
+### 5-3. Node.js 외부 서버 예시
+
+```js
+// external-server.js (외부 서버, MAPI 코드 없음)
+const mqtt = require('mqtt');
+
+const client = mqtt.connect('mqtt://mqtt.hdeng.net:1883', {
+  username: 'smart',
+  password: 'korea',
+});
+
+const pending = new Map();
+
+client.on('connect', () => {
+  client.subscribe('mapi/+/res', { qos: 1 });
+  client.subscribe('mapi/+/status');
+});
+
+client.on('message', (topic, payload) => {
+  const [, deviceId, type] = topic.split('/');
+  const msg = JSON.parse(payload.toString());
+
+  if (type === 'res') {
+    const p = pending.get(msg.requestId);
+    if (p) { clearTimeout(p.timer); pending.delete(msg.requestId); p.resolve(msg); }
+  } else if (type === 'status') {
+    console.log(`[${deviceId}]`, msg.online ? '온라인' : '오프라인');
+  }
+});
+
+function callMapi(deviceId, method, path, body, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const requestId = `ext-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+    const timer = setTimeout(() => {
+      pending.delete(requestId);
+      reject(new Error('timeout'));
+    }, timeoutMs);
+    pending.set(requestId, { resolve, timer });
+    client.publish(
+      `mapi/${deviceId}/cmd`,
+      JSON.stringify({ requestId, action: 'api', params: { method, path, body } }),
+      { qos: 1 },
+    );
+  });
+}
+
+// 사용 예
+(async () => {
+  await new Promise(r => client.once('connect', r));
+  const result = await callMapi('smartfarm-001', 'GET', '/api/sensor/realtime');
+  console.log(result.data);
+})();
+```
+
+### 5-4. Python 외부 서버 예시
+
+```python
+# external_server.py
+import paho.mqtt.client as mqtt
+import json, threading, time, uuid
+
+BROKER, PORT = "mqtt.hdeng.net", 1883
+USER, PASS = "smart", "korea"
+
+pending = {}  # requestId → threading.Event + result holder
+
+def on_connect(c, userdata, flags, rc):
+    c.subscribe("mapi/+/res", qos=1)
+    c.subscribe("mapi/+/status")
+
+def on_message(c, userdata, msg):
+    parts = msg.topic.split("/")
+    device_id, mtype = parts[1], parts[2]
+    data = json.loads(msg.payload.decode())
+    if mtype == "res":
+        slot = pending.get(data["requestId"])
+        if slot:
+            slot["result"] = data
+            slot["event"].set()
+
+client = mqtt.Client()
+client.username_pw_set(USER, PASS)
+client.on_connect = on_connect
+client.on_message = on_message
+client.connect(BROKER, PORT)
+threading.Thread(target=client.loop_forever, daemon=True).start()
+time.sleep(0.5)  # 연결 대기
+
+def call_mapi(device_id, method, path, body=None, timeout=10):
+    request_id = f"py-{uuid.uuid4().hex[:8]}"
+    event = threading.Event()
+    pending[request_id] = {"event": event, "result": None}
+    client.publish(
+        f"mapi/{device_id}/cmd",
+        json.dumps({"requestId": request_id, "action": "api",
+                    "params": {"method": method, "path": path, "body": body}}),
+        qos=1,
+    )
+    if event.wait(timeout):
+        return pending.pop(request_id)["result"]
+    pending.pop(request_id, None)
+    raise TimeoutError("MAPI timeout")
+
+# 사용 예
+result = call_mapi("smartfarm-001", "GET", "/api/sensor/realtime")
+print(result["data"])
+```
+
+### 5-5. 명령줄에서 빠른 테스트 (mosquitto)
+
+```bash
+# 응답 구독 (별도 터미널)
+mosquitto_sub -h mqtt.hdeng.net -p 1883 -u smart -P korea -t 'mapi/smartfarm-001/res'
+
+# 명령 발행
+mosquitto_pub -h mqtt.hdeng.net -p 1883 -u smart -P korea \
+  -t 'mapi/smartfarm-001/cmd' \
+  -m '{"requestId":"manual-1","action":"api","params":{"method":"GET","path":"/api/sensor/realtime"}}'
+```
+
+### 5-6. 설계 패턴 추천
+
+**개별 장비를 자주 호출하는 외부 서비스:**
+- 위의 Node.js/Python 예시처럼 **MQTT 클라이언트를 1개 띄우고 모듈화**해서 사용
+
+**다수 장비의 데이터를 수집/분석하는 서비스:**
+- `mapi/+/status` + `mapi/+/res` 와일드카드 구독으로 모든 트래픽 모니터링
+- 또는 별도의 데이터 토픽(예: `mapi/{deviceId}/data`) 규약을 정해서 장비가 주기적으로 발행
+
+**REST API로 노출하고 싶을 때 (예: 모바일 앱이 호출하는 백엔드):**
+- 외부 서버에 위 코드를 넣고 그 위에 Express/FastAPI 등으로 HTTP 엔드포인트 작성
+- 즉, **MQTT 래퍼를 한 번 더 HTTP로 다시 래핑**하는 구조
+
+### 5-7. 외부 서버 보안 권고
+
+- 외부 서버용 MQTT 계정을 **장비용과 분리**하는 것을 권장 (예: `external-readonly` 같은 별도 계정)
+- 브로커 ACL로 외부 계정은 `mapi/+/res`, `mapi/+/status` 구독만 허용하고 `cmd` 발행은 화이트리스트 장비만 허용
+- 외부 서버가 호출 가능한 `deviceId` 목록을 코드 레벨에서 한 번 더 검증
+- 민감한 작업(장비 제어 등)은 호출 시점에 추가 인증 토큰을 `params`에 포함하여 장비/MAPI 서버에서 검증
+
+### 5-8. 외부 서버 통합 체크리스트 (Claude Code)
+
+외부 서버에 MAPI 호출 코드를 통합할 때 확인할 사항:
+
+- [ ] 외부 서버가 사용하는 언어의 MQTT 클라이언트 라이브러리 설치 (`mqtt`, `paho-mqtt`, `eclipse/paho.mqtt.golang` 등)
+- [ ] 환경변수 또는 시크릿 매니저로 브로커 URL/계정 관리 (하드코딩 금지)
+- [ ] 클라이언트 인스턴스를 **싱글톤으로 관리** (요청마다 새로 연결하면 안 됨)
+- [ ] `requestId` 충돌 방지 (UUID 또는 충분한 랜덤성)
+- [ ] 응답 타임아웃 처리 + pending Map 정리 (메모리 누수 방지)
+- [ ] 연결 끊김 시 자동 재연결 + pending 요청 reject 처리
+- [ ] 서비스 종료 시 graceful shutdown으로 MQTT 연결 정리
 
 ---
 
